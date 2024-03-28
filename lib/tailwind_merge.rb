@@ -51,13 +51,10 @@ module TailwindMerge
       # @example 'hover:focus:bg-color'
       # @example 'md:!pr'
       class_groups_in_conflict = Set.new
-
       classes.strip.split(SPLIT_CLASSES_REGEX).map do |original_class_name|
-        modifiers, has_important_modifier, base_class_name, maybe_postfix_modifier_position = split_modifiers(original_class_name, separator: @config[:separator])
-
+        modifiers, important_modifier, base_class_name, maybe_postfix_modifier_position = split_modifiers(original_class_name, separator: @config[:separator])
         actual_base_class_name = maybe_postfix_modifier_position ? base_class_name[0...maybe_postfix_modifier_position] : base_class_name
         class_group_id = @class_utils.class_group_id(actual_base_class_name)
-
         unless class_group_id
           unless maybe_postfix_modifier_position
             next {
@@ -65,29 +62,19 @@ module TailwindMerge
               original_class_name: original_class_name,
             }
           end
-
           class_group_id = @class_utils.class_group_id(base_class_name)
-
           unless class_group_id
             next {
-              isTailwindClass: false,
+              is_tailwind_class: false,
               original_class_name: original_class_name,
             }
-
           end
-
+          has_postfix_modifier = true
+        else
           has_postfix_modifier = false
-
-          next {
-            is_tailwind_class: false,
-            original_class_name: original_class_name,
-          }
         end
-
         variant_modifier = sort_modifiers(modifiers).join(":")
-
-        modifier_id = has_important_modifier ? "#{variant_modifier}#{IMPORTANT_MODIFIER}" : variant_modifier
-
+        modifier_id = important_modifier ? "#{variant_modifier}#{IMPORTANT_MODIFIER}" : variant_modifier
         {
           is_tailwind_class: true,
           modifier_id: modifier_id,
@@ -96,23 +83,17 @@ module TailwindMerge
           has_postfix_modifier: has_postfix_modifier,
         }
       end.reverse # Last class in conflict wins, so filter conflicting classes in reverse order.
-        .select do |parsed|
+      .select do |parsed|
         next(true) unless parsed[:is_tailwind_class]
-
         modifier_id = parsed[:modifier_id]
         class_group_id = parsed[:class_group_id]
         has_postfix_modifier = parsed[:has_postfix_modifier]
-
         class_id = "#{modifier_id}#{class_group_id}"
-
         next if class_groups_in_conflict.include?(class_id)
-
         class_groups_in_conflict.add(class_id)
-
         @class_utils.get_conflicting_class_group_ids(class_group_id, has_postfix_modifier).each do |group|
           class_groups_in_conflict.add("#{modifier_id}#{group}")
         end
-
         true
       end.reverse.map { |parsed| parsed[:original_class_name] }.join(" ")
     end
